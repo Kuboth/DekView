@@ -8,5 +8,8 @@
   },
   "dependencies": {
     "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.26.0"
   }
 }

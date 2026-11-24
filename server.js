@@ -7,6 +7,20 @@ const PORT = 8080;
 const PUBLIC_DIR = __dirname;
 
 // Servidor HTTP simples para servir a interface web do DekView
+const os = require('os');
+
+function getLocalIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
 const server = http.createServer((req, res) => {
   let reqPath = req.url.split('?')[0];
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
@@ -77,9 +91,11 @@ wss.on('connection', (ws, req) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
+  const localIp = getLocalIp();
   console.log(`=======================================================`);
-  console.log(`🚀 DekView Host Server rodando em http://localhost:${PORT}`);
-  console.log(`📡 WebSocket ativo na mesma porta (ws://localhost:${PORT})`);
+  console.log(`🚀 DekView Host Server rodando!`);
+  console.log(`📌 Endereço local: http://${localIp}:${PORT}`);
+  console.log(`📡 WebSocket ativo em: ws://${localIp}:${PORT}`);
   console.log(`=======================================================\n`);
-  console.log(`Abra o navegador no dispositivo receptor apontando para este IP:8080`);
+  console.log(`Abra o DekView no Tablet/Celular e conecte em: ${localIp}:${PORT}\n`);
 });
