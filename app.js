@@ -127,7 +127,7 @@
             }
           } catch (e) {}
         } else if (event.data instanceof Blob) {
-          // Renderização de quadros de vídeo (JPEG / WebP / H264 via ImageBitmap)
+          // Renderização de quadros de vídeo (JPEG comprimido em tempo real)
           try {
             const bitmap = await createImageBitmap(event.data);
             canvasCtx.drawImage(bitmap, 0, 0, streamCanvas.width, streamCanvas.height);

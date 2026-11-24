@@ -1,13 +1,13 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { WebSocketServer } = require('ws');
+const screenshot = require('screenshot-desktop');
+const sharp = require('sharp');
 
 const PORT = 8080;
 const PUBLIC_DIR = __dirname;
-
-// Servidor HTTP simples para servir a interface web do DekView
-const os = require('os');
 
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
@@ -21,6 +21,7 @@ function getLocalIp() {
   return 'localhost';
 }
 
+// Servidor HTTP para servir a aplicação web
 const server = http.createServer((req, res) => {
   let reqPath = req.url.split('?')[0];
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
@@ -32,7 +33,8 @@ const server = http.createServer((req, res) => {
     '.html': 'text/html; charset=utf-8',
     '.js': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
-    '.json': 'application/json'
+    '.json': 'application/json',
+    '.png': 'image/png'
   };
 
   fs.readFile(filePath, (err, content) => {
@@ -51,49 +53,77 @@ const server = http.createServer((req, res) => {
   });
 });
 
-// Servidor WebSocket integrado na mesma porta (8080)
 const wss = new WebSocketServer({ server });
+
+let activeClients = new Set();
+let isCapturing = false;
+
+// Loop contínuo de captura e transmissão de tela
+async function captureAndBroadcast() {
+  if (activeClients.size === 0) {
+    isCapturing = false;
+    return;
+  }
+
+  try {
+    // Captura o frame bruto da tela principal
+    const imgBuffer = await screenshot({ format: 'jpeg' });
+
+    // Otimiza e comprime rapidamente para envio leve via rede local
+    const compressed = await sharp(imgBuffer)
+      .jpeg({ quality: 65, mozjpeg: false })
+      .toBuffer();
+
+    for (const client of activeClients) {
+      if (client.readyState === 1) { // WebSocket.OPEN
+        client.send(compressed);
+      }
+    }
+  } catch (err) {
+    // Erro comum caso a tela seja bloqueada temporariamente
+  }
+
+  // Agenda o próximo frame (visando ~30-40 FPS em rede local)
+  setTimeout(captureAndBroadcast, 25);
+}
 
 wss.on('connection', (ws, req) => {
   const remoteIp = req.socket.remoteAddress;
-  console.log(`\n[+] Cliente receptor conectado de: ${remoteIp}`);
+  console.log(`\n[+] Cliente conectado: ${remoteIp}`);
+  activeClients.add(ws);
 
-  // Simulação de geração de stream de vídeo de teste (1x1 pixel PNG ou JPEG simulado)
-  // Em uma solução completa com driver (como spacedesk/IddSampleDriver), os frames de tela são enviados aqui
-  const pingInterval = setInterval(() => {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ type: 'ping', time: Date.now() }));
-    }
-  }, 3000);
+  if (!isCapturing) {
+    isCapturing = true;
+    console.log(`[▶] Iniciando captura e transmissão de tela em tempo real...`);
+    captureAndBroadcast();
+  }
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
       if (data.type === 'pointer_event') {
+        // Exibe no console a interação do tablet
         const pType = data.pointerType;
         const pressureStr = (data.pressure > 0) ? `| Pressão: ${(data.pressure * 100).toFixed(1)}%` : '';
-        const tiltStr = (data.tiltX || data.tiltY) ? `| Tilt: [${data.tiltX}°, ${data.tiltY}°]` : '';
-        console.log(`[POINTER] Evento: ${data.event} | Tipo: ${pType.padEnd(5)} | Pos: (${data.x}, ${data.y}) [Norm: ${data.normX}, ${data.normY}] ${pressureStr} ${tiltStr}`);
+        console.log(`[POINTER] ${data.event} | ${pType.padEnd(5)} | (${data.x}, ${data.y}) [Norm: ${data.normX}, ${data.normY}] ${pressureStr}`);
       } else if (data.type === 'handshake') {
-        console.log(`[HANDSHAKE] Cliente inicializado: Resolução: ${data.screenWidth}x${data.screenHeight} | DPR: ${data.devicePixelRatio} | MaxTouch: ${data.touchPoints}`);
-      } else if (data.type === 'wheel_event') {
-        console.log(`[WHEEL] Rolagem delta: (${data.deltaX}, ${data.deltaY})`);
+        console.log(`[HANDSHAKE] Cliente inicializado: Resolução: ${data.screenWidth}x${data.screenHeight} | DPR: ${data.devicePixelRatio}`);
       }
     } catch (e) {
-      console.log(`[RAW DADOS]:`, message);
+      // Ignora dados não-JSON
     }
   });
 
   ws.on('close', () => {
-    clearInterval(pingInterval);
-    console.log(`[-] Cliente desconectado (${remoteIp})`);
+    activeClients.delete(ws);
+    console.log(`[-] Cliente desconectado (${remoteIp}). Clientes ativos: ${activeClients.size}`);
   });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
   const localIp = getLocalIp();
   console.log(`=======================================================`);
-  console.log(`🚀 DekView Host Server rodando!`);
+  console.log(`🚀 DekView Host Server rodando com Captura em Tempo Real!`);
   console.log(`📌 Endereço local: http://${localIp}:${PORT}`);
   console.log(`📡 WebSocket ativo em: ws://${localIp}:${PORT}`);
   console.log(`=======================================================\n`);
