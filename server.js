@@ -66,8 +66,13 @@ async function captureAndBroadcast() {
   }
 
   try {
-    // Captura o frame bruto da tela principal
-    const imgBuffer = await screenshot({ format: 'jpeg' });
+    // Detecta os monitores disponíveis
+    const displays = await screenshot.listDisplays();
+    // Se existir 2 ou mais telas, seleciona a segunda tela (virtual); caso contrário, a tela principal
+    const targetDisplay = displays.length > 1 ? displays[1] : displays[0];
+
+    // Captura o frame bruto da tela selecionada
+    const imgBuffer = await screenshot({ screen: targetDisplay.id, format: 'jpeg' });
 
     // Otimiza e comprime rapidamente para envio leve via rede local
     const compressed = await sharp(imgBuffer)
