@@ -1,0 +1,12 @@
+{
+  "name": "dekview",
+  "version": "1.0.0",
+  "description": "DekView - Receptor e Host de Segunda Tela com suporte a Pointer Events, Touch e Pen",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.23.0"
+  }
+}
